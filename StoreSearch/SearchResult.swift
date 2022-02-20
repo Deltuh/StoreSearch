@@ -34,8 +34,6 @@ class SearchResult: Codable, CustomStringConvertible {
     var itemGenre: String?
     var bookGenre: [String]?
     
-    
-    
     // changed the property names to be more descriptive
     enum CodingKeys: String, CodingKey {
         case imageSmall = "artworkUrl60"
@@ -47,8 +45,6 @@ class SearchResult: Codable, CustomStringConvertible {
         case trackName, trackPrice, trackViewUrl
         case collectionName, collectionViewUrl, collectionPrice
     }
-    
-    
     
     var description: String {
         return "\nResult - Kind: \(kind ?? "None"), Name: \(name), Artist Name: \(artistName ?? "None")"
@@ -97,5 +93,6 @@ class SearchResult: Codable, CustomStringConvertible {
     var artist: String {
         return artistName ?? ""
     }
+    
     
 }

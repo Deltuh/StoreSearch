@@ -10,6 +10,7 @@ import UIKit
 class SearchViewController: UIViewController {
     @IBOutlet weak var searchBar: UISearchBar!
     @IBOutlet weak var tableView: UITableView!
+    @IBOutlet weak var segmentedControl: UISegmentedControl!
     
     var searchResults = [SearchResult]()
     var hasSearched = false
@@ -26,7 +27,7 @@ class SearchViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        tableView.contentInset = UIEdgeInsets(top: 47, left: 0, bottom: 0, right: 0)
+        tableView.contentInset = UIEdgeInsets(top: 91, left: 0, bottom: 0, right: 0)
         
         // Register nib file for use in code
         var cellNib = UINib(nibName: TableView.CellIdentifiers.searchResultCell, bundle: nil)
@@ -43,19 +44,30 @@ class SearchViewController: UIViewController {
             cellNib,
             forCellReuseIdentifier: TableView.CellIdentifiers.loadingCell)
     }
+    
+    @IBAction func segmentChanged(_ sender: UISegmentedControl) {
+        performSearch()
+    }
+    
+    
 // MARK: - Helper Methods
-    func iTunesURL(searchText: String) -> URL {
-        let encodedText = searchText.addingPercentEncoding(
-            withAllowedCharacters: CharacterSet.urlQueryAllowed)!
-        let urlString = String(
-            format: "https://itunes.apple.com/search?term=%@&limit=200",
-            encodedText)
-        let url = URL(string: urlString)
-        return url!
+    func iTunesURL(searchText: String, category: Int) -> URL {
+      let kind: String
+      switch category {
+        case 1: kind = "musicTrack"
+        case 2: kind = "software"
+        case 3: kind = "ebook"
+        default: kind = ""
+      }
+      let encodedText = searchText.addingPercentEncoding(
+          withAllowedCharacters: CharacterSet.urlQueryAllowed)!
+      let urlString = "https://itunes.apple.com/search?" +
+        "term=\(encodedText)&limit=200&entity=\(kind)"
+      
+      let url = URL(string: urlString)
+      return url!
     }
 
-    
-    
     // Using a JSONDecoder object to convert the response data from the server to a temp ResultArray object from
     // which you extract the results property.
     func parse(data: Data) -> [SearchResult] {
@@ -88,48 +100,49 @@ class SearchViewController: UIViewController {
 // MARK: - Search Bar Delegate
 extension SearchViewController: UISearchBarDelegate {
   func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
-      if !searchBar.text!.isEmpty {
-          searchBar.resignFirstResponder()
-          
-          dataTask?.cancel()
-          isLoading = true
-          tableView.reloadData()
-          
-          hasSearched = true
-          searchResults = []
-          
-          // Create the URL object using the search text
-          let url = iTunesURL(searchText: searchBar.text!)
-          
-          // Get a shared URLSession instance
-          let session = URLSession.shared
-          
-          // Create a data task
-          dataTask = session.dataTask(with: url) {data, response, error in
-              
-              if let error = error as NSError?, error.code == -999 {
-                  return
-              } else if let httpResponse = response as? HTTPURLResponse,
-                        httpResponse.statusCode == 200 {
-                  if let data = data {
-                      self.searchResults = self.parse(data: data)
-                      self.searchResults.sort(by: <)
-                      DispatchQueue.main.async {
-                          self.hasSearched = false
-                          self.isLoading = false
-                          self.tableView.reloadData()
-                          self.showNetworkError()
-                      }
-                      return
-                  }
-              } else {
-                print("Failure! \(response!)")
-              }
-            }
-          
-          dataTask?.resume()
-          }
+     performSearch()
   }
+      
+    func performSearch() {
+       if !searchBar.text!.isEmpty {
+         searchBar.resignFirstResponder()
+
+         dataTask?.cancel()
+         isLoading = true
+         tableView.reloadData()
+
+         hasSearched = true
+         searchResults = []
+
+         let url = iTunesURL(searchText: searchBar.text!, category: segmentedControl.selectedSegmentIndex)
+         let session = URLSession.shared
+         dataTask = session.dataTask(with: url) {data, response, error in
+           if let error = error as NSError?, error.code == -999 {
+             return  // Search was cancelled
+           } else if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+             if let data = data {
+               self.searchResults = self.parse(data: data)
+               self.searchResults.sort(by: <)
+               DispatchQueue.main.async {
+                 self.isLoading = false
+                 self.tableView.reloadData()
+               }
+               return
+             }
+           } else {
+             print("Failure! \(response!)")
+           }
+           DispatchQueue.main.async {
+             self.hasSearched = false
+             self.isLoading = false
+             self.tableView.reloadData()
+             self.showNetworkError()
+           }
+         }
+         dataTask?.resume()
+       }
+     }
+    
   func position(for bar: UIBarPositioning) -> UIBarPosition {
     return .topAttached
   }
@@ -174,15 +187,7 @@ extension SearchViewController: UITableViewDelegate, UITableViewDataSource {
                 withIdentifier: TableView.CellIdentifiers.searchResultCell,
                for: indexPath) as! SearchResultCell
             let searchResult = searchResults[indexPath.row]
-            cell.nameLabel.text = searchResult.name
-            if searchResult.artist.isEmpty {
-                cell.artistNameLabel.text = "Unknown"
-            }   else {
-                cell.artistNameLabel.text = String(
-                    format: "%@ (%@)",
-                    searchResult.artist,
-                    searchResult.type)
-            }
+            cell.configure(for: searchResult)
             return cell
         }
     }
